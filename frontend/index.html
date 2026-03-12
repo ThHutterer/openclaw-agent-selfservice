@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenClaw Agent Self-Service</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; color: #1a1a2e; }
+
+  header {
+    background: #1a1a2e;
+    color: #fff;
+    padding: 1rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  header h1 { font-size: 1.3rem; font-weight: 600; }
+  header span { font-size: 0.85rem; opacity: 0.6; }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 1.5rem 2rem; }
+
+  .card {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: #1a1a2e; }
+
+  /* Status panel */
+  .status-row { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.3rem 0.75rem; border-radius: 999px; font-size: 0.82rem; font-weight: 600;
+  }
+  .badge.green { background: #d1fae5; color: #065f46; }
+  .badge.red { background: #fee2e2; color: #991b1b; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot.green { background: #10b981; }
+  .dot.red { background: #ef4444; }
+  .status-meta { font-size: 0.82rem; color: #6b7280; }
+
+  /* Form */
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .form-group { display: flex; flex-direction: column; gap: 0.3rem; }
+  .form-group.full { grid-column: 1 / -1; }
+  label { font-size: 0.82rem; font-weight: 500; color: #374151; }
+  input, textarea, select {
+    border: 1px solid #d1d5db; border-radius: 6px;
+    padding: 0.5rem 0.75rem; font-size: 0.9rem;
+    transition: border-color 0.15s;
+    font-family: inherit;
+  }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: #6366f1; }
+  textarea { resize: vertical; min-height: 80px; }
+  .hint { font-size: 0.75rem; color: #9ca3af; }
+  .field-error { font-size: 0.75rem; color: #ef4444; display: none; }
+
+  /* Buttons */
+  button {
+    cursor: pointer; border: none; border-radius: 6px;
+    padding: 0.5rem 1.1rem; font-size: 0.88rem; font-weight: 500;
+    transition: opacity 0.15s;
+  }
+  button:hover { opacity: 0.85; }
+  .btn-primary { background: #6366f1; color: #fff; }
+  .btn-danger { background: #ef4444; color: #fff; padding: 0.3rem 0.75rem; font-size: 0.8rem; }
+  .btn-secondary { background: #e5e7eb; color: #374151; }
+  .form-actions { margin-top: 1rem; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: 0.87rem; }
+  th { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 2px solid #e5e7eb; color: #6b7280; font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  td { padding: 0.65rem 0.75rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+  tr:hover td { background: #f9fafb; }
+  .empty-state { text-align: center; color: #9ca3af; padding: 2rem; font-size: 0.9rem; }
+
+  /* Status badges in table */
+  .tag { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+  .tag.active { background: #d1fae5; color: #065f46; }
+  .tag.deleted { background: #fee2e2; color: #991b1b; }
+
+  /* Telegram indicator */
+  .tg { display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; }
+  .tg .dot { flex-shrink: 0; }
+
+  /* Toast */
+  #toast-container {
+    position: fixed; bottom: 1.5rem; right: 1.5rem;
+    display: flex; flex-direction: column; gap: 0.5rem;
+    z-index: 9999;
+  }
+  .toast {
+    padding: 0.75rem 1.2rem; border-radius: 8px;
+    color: #fff; font-size: 0.88rem; font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    animation: slideIn 0.2s ease;
+    max-width: 320px;
+  }
+  .toast.success { background: #10b981; }
+  .toast.error { background: #ef4444; }
+  @keyframes slideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes slideOut { from { opacity: 1; } to { opacity: 0; transform: translateX(120%); } }
+  .toast.out { animation: slideOut 0.3s ease forwards; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>OpenClaw Self-Service</h1>
+  <span>Agent Provisioning Dashboard</span>
+</header>
+
+<div class="container">
+
+  <!-- Status Panel -->
+  <div class="card">
+    <h2>OpenClaw Gateway</h2>
+    <div class="status-row">
+      <div id="status-badge" class="badge red"><span class="dot red"></span> Checking...</div>
+      <span id="status-meta" class="status-meta"></span>
+      <button class="btn-secondary" onclick="reloadOpenclaw()">Reload OpenClaw</button>
+    </div>
+  </div>
+
+  <!-- Agent Form -->
+  <div class="card">
+    <h2>Create New Agent</h2>
+    <form id="agent-form" onsubmit="submitForm(event)">
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="owner_name">Your Name</label>
+          <input type="text" id="owner_name" placeholder="e.g. Thomas Gosch" required>
+        </div>
+        <div class="form-group">
+          <label for="organization">Organisation</label>
+          <input type="text" id="organization" placeholder="e.g. werchota.ai" required>
+        </div>
+        <div class="form-group">
+          <label for="display_name">Agent Display Name</label>
+          <input type="text" id="display_name" placeholder="e.g. Werchota RAG Agent" required oninput="onDisplayNameInput()">
+        </div>
+        <div class="form-group">
+          <label for="agent_id">Agent ID (slug)</label>
+          <input type="text" id="agent_id" placeholder="e.g. werchota-rag-agent" required oninput="onAgentIdInput()">
+          <span class="hint">Lowercase letters, digits, hyphens only: [a-z0-9-]</span>
+          <span class="field-error" id="slug-error">Invalid format — use lowercase letters, digits, hyphens only</span>
+        </div>
+        <div class="form-group full">
+          <label for="description">Description (used as system prompt basis)</label>
+          <textarea id="description" placeholder="Describe what this agent does..." required></textarea>
+        </div>
+        <div class="form-group">
+          <label for="model_primary">Model</label>
+          <select id="model_primary">
+            <option value="google/gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+            <option value="google/gemini-2.5-pro-preview-05-06">Gemini 2.5 Pro Preview</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn-primary">Create Agent</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Agent List -->
+  <div class="card">
+    <h2>Agents</h2>
+    <div id="agent-table-container">
+      <div class="empty-state">Loading...</div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+  let slugManuallyEdited = false;
+
+  function toSlug(name) {
+    return name.toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .trim();
+  }
+
+  function onDisplayNameInput() {
+    if (!slugManuallyEdited) {
+      document.getElementById('agent_id').value = toSlug(document.getElementById('display_name').value);
+    }
+  }
+
+  function onAgentIdInput() {
+    slugManuallyEdited = true;
+  }
+
+  function showToast(message, type = 'success') {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.classList.add('out');
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  }
+
+  async function loadStatus() {
+    try {
+      const res = await fetch('/api/openclaw/status');
+      const data = await res.json();
+      const badge = document.getElementById('status-badge');
+      const meta = document.getElementById('status-meta');
+      if (data.alive) {
+        badge.className = 'badge green';
+        badge.innerHTML = '<span class="dot green"></span> Running';
+        meta.textContent = `Gateway: ${data.gateway_url}  |  PID: ${data.pid}`;
+      } else {
+        badge.className = 'badge red';
+        badge.innerHTML = '<span class="dot red"></span> Stopped';
+        meta.textContent = `Gateway: ${data.gateway_url}`;
+      }
+    } catch {
+      const badge = document.getElementById('status-badge');
+      badge.className = 'badge red';
+      badge.innerHTML = '<span class="dot red"></span> Unreachable';
+    }
+  }
+
+  async function reloadOpenclaw() {
+    try {
+      const res = await fetch('/api/openclaw/reload', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        showToast('OpenClaw reload triggered', 'success');
+      } else {
+        showToast(data.detail || 'Reload failed', 'error');
+      }
+    } catch {
+      showToast('Failed to reach backend', 'error');
+    }
+  }
+
+  function formatDate(iso) {
+    const d = new Date(iso);
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  async function loadAgents() {
+    try {
+      const res = await fetch('/api/agents');
+      const agents = await res.json();
+      const container = document.getElementById('agent-table-container');
+
+      if (!agents.length) {
+        container.innerHTML = '<div class="empty-state">No agents yet.</div>';
+        return;
+      }
+
+      const rows = agents.map(a => `
+        <tr>
+          <td><code>${a.agent_id}</code></td>
+          <td>${a.display_name}</td>
+          <td>${a.organization}</td>
+          <td>${a.owner_name}</td>
+          <td>${formatDate(a.created_at)}</td>
+          <td><span class="tag ${a.status}">${a.status}</span></td>
+          <td>
+            <div class="tg">
+              <span class="dot ${a.telegram_token_set ? 'green' : 'red'}"></span>
+              ${a.telegram_token_set ? 'Token set' : 'Token missing'}
+            </div>
+          </td>
+          <td>
+            ${a.status === 'active' ? `<button class="btn-danger" onclick="deleteAgent('${a.id}', '${a.agent_id}')">Delete</button>` : '—'}
+          </td>
+        </tr>
+      `).join('');
+
+      container.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Agent ID</th>
+              <th>Display Name</th>
+              <th>Organisation</th>
+              <th>Owner</th>
+              <th>Created</th>
+              <th>Status</th>
+              <th>Telegram</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    } catch {
+      showToast('Failed to load agents', 'error');
+    }
+  }
+
+  async function deleteAgent(id, agentId) {
+    if (!confirm(`Delete agent "${agentId}"? This removes it from OpenClaw.`)) return;
+    try {
+      const res = await fetch(`/api/agents/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok) {
+        showToast(`Agent "${agentId}" deleted`, 'success');
+        loadAgents();
+      } else {
+        showToast(data.detail || 'Delete failed', 'error');
+      }
+    } catch {
+      showToast('Failed to reach backend', 'error');
+    }
+  }
+
+  async function submitForm(e) {
+    e.preventDefault();
+    const agentId = document.getElementById('agent_id').value.trim();
+    const slugError = document.getElementById('slug-error');
+
+    if (!/^[a-z0-9-]+$/.test(agentId)) {
+      slugError.style.display = 'block';
+      document.getElementById('agent_id').focus();
+      return;
+    }
+    slugError.style.display = 'none';
+
+    const body = {
+      agent_id: agentId,
+      display_name: document.getElementById('display_name').value.trim(),
+      owner_name: document.getElementById('owner_name').value.trim(),
+      organization: document.getElementById('organization').value.trim(),
+      description: document.getElementById('description').value.trim(),
+      model_primary: document.getElementById('model_primary').value,
+    };
+
+    try {
+      const res = await fetch('/api/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (res.status === 201) {
+        showToast(`Agent "${body.agent_id}" created!`, 'success');
+        document.getElementById('agent-form').reset();
+        slugManuallyEdited = false;
+        loadAgents();
+      } else {
+        showToast(data.detail || 'Error creating agent', 'error');
+      }
+    } catch {
+      showToast('Failed to reach backend', 'error');
+    }
+  }
+
+  // Initial load
+  loadStatus();
+  loadAgents();
+
+  // Poll every 5 seconds
+  setInterval(loadStatus, 5000);
+  setInterval(loadAgents, 5000);
+</script>
+</body>
+</html>
